@@ -1201,7 +1201,6 @@ if( params.aligner == 'biscuit' ){
 			}
 
 		input:
-		//set val(name), file(bam) from ch_bam_for_samtools_sort_index_flagstat
 		set val(name_samblaster), file(samblaster_bam) from ch_samblaster_for_samtools_sort_index_flagstat
 		file wherearemyfiles from ch_wherearemyfiles_for_samtools_sort_index_flagstat.collect()
 
