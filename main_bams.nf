@@ -1213,11 +1213,11 @@ if( params.aligner == 'biscuit' || params.bams ){
 		fasta = bwa_indices[0].toString() - '.bwameth' - '.c2t' - '.amb' - '.ann' - '.bwt' - '.pac' - '.sa' - '.fai'  - '.par' - '.dau' -'.bis'
 		assembly = fasta.replaceAll(/\.\w+/,"")
 		prefix = reads[0].toString() - ~/(_R1)?(_trimmed)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?(\.bz2)?$/
-		non_directional = params.non_directional ? 0 : 1
-		// Paired-end or single end input files and pbat or not 
-		input = params.pbat ? params.single_end ? reads + " -b 3" : "${reads[1]} ${reads[0]}" :  reads
+		non_directional = params.non_directional ? ' -b 0' : ' -b 1'
+		// Paired-end or single end input files and pbat or not: yes yes, yes no, no no
+		input = params.pbat ? params.single_end ? reads + " -b 3" : "${reads[1]} ${reads[0]}" + non_directional :  reads + non_directional
 		"""
-		biscuit align -M -b $non_directional -t ${task.cpus} $fasta $input | samtools view -Sb > ${name}.${assembly}.bam
+		biscuit align -t ${task.cpus} $fasta $input | samtools view -Sb > ${name}.${assembly}.bam
 		"""
 	}
 
