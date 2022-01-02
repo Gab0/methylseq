@@ -40,7 +40,7 @@ def helpMessage() {
 	 --save_align_intermeds [bool]      Save aligned intermediates to results directory
 	 --save_trimmed [bool]              Save trimmed reads to results directory
 	 --save_pileup_file [bool]          Save vcf-pileup and index-vcf files from biscuit aligner to results directory
-	 --save_snp_file					Save SNP bed-file from biscuit to results directory. Relevant only if '--epiread' is specified
+	 --save_snp_file [bool]				Save SNP bed-file from biscuit to results directory. Relevant only if '--epiread' is specified
 	 --unmapped [bool]                  Save unmapped reads to fastq files
 	 --relax_mismatches [bool]          Turn on to relax stringency for alignment (set allowed penalty with --num_mismatches)
 	 --num_mismatches [float]           0.6 will allow a penalty of bp * -0.6 - for 100bp reads (bismark default is 0.2)
@@ -50,9 +50,9 @@ def helpMessage() {
 	 --bismark_align_cpu_per_multicore [int] Specify how many CPUs are required per --multicore for bismark align (default = 3)
 	 --bismark_align_mem_per_multicore [str] Specify how much memory is required per --multicore for bismark align (default = 13.GB)
 	 --soloWCGW_file [path]             soloWCGW file, to intersect with methyl_extract bed file. soloWCGW for hg38 can be downlaod from: www.cse.huji.ac.il/~ekushele/solo_WCGW_cpg_hg38.bed. EXPERMINTAL!
-	--assets_dir [path]                Assets directory for biscuit_QC, REQUIRED IF IN BISCUIT ALIGNER. can be found at: https://www.cse.huji.ac.il/~ekushele/assets.html
+	 --assets_dir [path]                Path to assets directory for biscuit_QC
 	 --epiread [bool]                   Convert bam to biscuit epiread format
-	 --whitelist [file]				The complement of blacklist, needed for SNP extraction For more instuctions: https://www.cse.huji.ac.il/~ekushele/assets.html#whitelist
+	 --whitelist [file]					The complement of blacklist, needed for SNP extraction For more instuctions: https://www.cse.huji.ac.il/~ekushele/assets.html#whitelist
 	 --common_dbsnp	[file]				Common dbSNP for the relevant genome, for SNP filteration
 	 --cpg_file [file]                  Path to CpG file for the relevant genome (0-besed coordinates, not compressed)
 	 --debug_epiread                    Debug epiread merging for paired end-keep original epiread file and merged epiread file in debug mode
@@ -115,8 +115,6 @@ params.bismark_index = params.genome ? params.genomes[ params.genome ].bismark ?
 params.bwa_meth_index = params.genome ? params.genomes[ params.genome ].bwa_meth ?: false : false
 params.fasta = params.genome ? params.genomes[ params.genome ].fasta ?: false : false
 params.fasta_index = params.genome ? params.genomes[ params.genome ].fasta_index ?: false : false
-
-
 assembly_name = (params.fasta.toString().lastIndexOf('/') == -1) ?: params.fasta.toString().substring( params.fasta.toString().lastIndexOf('/')+1)
 
 // Check if genome exists in the config file
@@ -155,7 +153,7 @@ else if( params.aligner == 'bwameth' || params.aligner == 'biscuit'){
 	Channel
 		.fromPath(params.fasta, checkIfExists: true)
 		.ifEmpty { exit 1, "fasta file not found : ${params.fasta}" }
-		.into { ch_fasta_for_makeBwaMemIndex; ch_fasta_for_makeFastaIndex; ch_fasta_for_methyldackel; ch_fasta_for_pileup; ch_fasta_for_epiread; ch_fasta_for_biscuitQC; ch_fasta_for_picard}
+		.into { ch_fasta_for_makeBwaMemIndex; ch_fasta_for_makeFastaIndex; ch_fasta_for_buildBiscuitQCAssets; ch_fasta_for_methyldackel; ch_fasta_for_pileup; ch_fasta_for_epiread; ch_fasta_for_biscuitQC; ch_fasta_for_picard}
 
 	if( params.bwa_meth_index ){
 		Channel
@@ -183,14 +181,12 @@ else if( params.aligner == 'bwameth' || params.aligner == 'biscuit'){
   }
 
 if( params.aligner == 'biscuit' && params.assets_dir ) {
-	//assert params.assets_dir : "Assets directory for biscuit-QC was not specified!"
-
 	Channel
 		.fromPath("${params.assets_dir}", checkIfExists: true)
 		.ifEmpty { exit 1, "Assets directory for biscuit QC not found: ${params.assets_dir}" }
 		.set { ch_assets_dir_for_biscuit_qc }
+	ch_fasta_for_buildBiscuitQCAssets.close()
 }
-
 
 if( workflow.profile == 'uppmax' || workflow.profile == 'uppmax_devel' ){
 	if( !params.project ) exit 1, "No UPPMAX project ID found! Use --project"
@@ -301,7 +297,7 @@ if (params.epiread) {
 	if (!params.single_end)
 		assert params.cpg_file: "No CpG file specified"
 
-	ch_cpg_for_epiread= Channel.empty()
+	ch_cpg_for_epiread = Channel.empty()
 	if (!params.single_end) {
 			if (params.cpg_file) {
 				Channel
@@ -311,30 +307,7 @@ if (params.epiread) {
 				}
 	}
 
-	// if( params.cpg_file_index ){
-		// Channel
-			// .fromPath(params.cpg_file_index, checkIfExists: true)
-			// .ifEmpty { exit 1, "CpG file not found : ${params.cpg_file_index}" }
-			// .set { ch_cpg_index_for_epiread }
-		// ch_cpg_file_for_cpg_index.close()
-	// }
-	// else
-	// {
-		// process make_cpg_file_index {
-			// input:
-			// file(cpg_file) from ch_cpg_file_for_cpg_index
-
-			// output:
-
-			// file("${cpg_file}.tbi") into ch_cpg_index_for_epiread
-
-			// script:
-
-			// """
-			// tabix $cpg_file
-			// """
-		// }
-	// }
+	
 }
 
 // Header log info
@@ -564,6 +537,27 @@ if( !params.fasta_index && params.aligner == 'bwameth' ||  !params.fasta_index &
 		script:
 		"""
 		samtools faidx $fasta
+		"""
+	}
+}
+
+/*
+ * PREPROCESSING - Build Biscuit QC assets
+ */
+if( !params.assets_dir &&  params.aligner == 'biscuit' ) {
+	process buildBiscuitQCAssets {
+		tag "$fasta"
+		publishDir path: "${params.outdir}/reference_assets", saveAs: { params.save_reference ? it : null }, mode: 'copy'
+
+		input:
+		file fasta from ch_fasta_for_buildBiscuitQCAssets
+
+		output:
+		file "*bed.gz" into ch_assets_dir_for_biscuit_qc
+
+		script:
+		"""
+		build_biscuit_QC_assets.pl -r $fasta -o .
 		"""
 	}
 }
@@ -1379,7 +1373,6 @@ if( params.aligner == 'biscuit' ){
 			output:
 			file "*${name}.e*.gz*"  
 			file "${name}.original.epiread.*" optional true
-//				tabix -0 -s 1 -b 5 -e 5 ${name}.epiread.gz
 
 			script:
 			snp_file = (snp.size()>0) ? "-B " + snp.toString() : ''
@@ -1420,7 +1413,6 @@ if( params.aligner == 'biscuit' ){
 		}
 	}
 
- if (params.assets_dir) {
 	process biscuit_QC {
 		tag "$name"
 		publishDir "${params.outdir}/biscuit_QC", mode: 'copy'
@@ -1437,7 +1429,6 @@ if( params.aligner == 'biscuit' ){
 		.combine(ch_fasta_index_for_biscuitQC)
 		.combine(ch_assets_dir_for_biscuit_qc)
 		
-		//		$baseDir/bin/biscuit_QC.sh -v ${vcf[0]} -o ${name}.${assembly}_biscuitQC $assets $fasta ${name}.${assembly} ${bam} -p ${task.cpus}
 		output:
 		file "*_biscuitQC" into ch_QC_results_for_multiqc
 
@@ -1447,12 +1438,7 @@ if( params.aligner == 'biscuit' ){
 		$baseDir/bin/biscuit_QC.sh -v ${vcf[0]} -o ${name}.${assembly}_biscuitQC $assets $fasta ${name}.${assembly} ${bam} 				
 		"""
 	}
- } 
- else {
-			ch_QC_results_for_multiqc = Channel.empty() 
-
-		}
-
+	
 } // end of biscuit if block
 else {
 	ch_flagstat_results_biscuit_for_multiqc = Channel.from(false)
@@ -1507,7 +1493,6 @@ process prepareGenomeToPicard {
 	output:
 	file "${fasta.baseName}.picard.fa" into ch_fasta_picard_for_picard
 	file "${fasta.baseName}.picard.dict" into ch_fasta_picard_dict_for_picard
-
 
 	script:
 	if( !task.memory ){
@@ -1638,7 +1623,6 @@ process multiqc {
 	output:
 	file "*multiqc_report.html" into ch_multiqc_report
 	file "*_data"
-	//file "multiqc_plots"
 	file "*_plots"
 
 	script:

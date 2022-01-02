@@ -15,7 +15,7 @@ dependencies:
   - bioconda::fastqc=0.11.9
   # Default bismark pipeline
   - bioconda::trim-galore=0.6.5
-  - bioconda::samtools=1.9
+  - bioconda::samtools=1.11
   - bioconda::bowtie2=2.3.5
   - bioconda::hisat2=2.2.0
   - bioconda::bismark=0.22.3
@@ -29,7 +29,7 @@ dependencies:
 # added
   - bioconda::samblaster=0.1.24
   - bioconda::bedtools=2.29.1
-  - bioconda::biscuit=0.3.15
+  - bioconda::biscuit=0.3.16.20200420
   - bioconda::bcftools=1.9
   - conda-forge::parallel
   - gawk=5.1.0
