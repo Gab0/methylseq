@@ -787,6 +787,10 @@ if( params.aligner =~ /bismark/ && !params.bams ){
 		samtools sort $bam \\
 			-@ ${task.cpus} $sort_mem \\
 			-o ${bam.baseName}.sorted.bam
+		
+		samtools index ${bam.baseName}.sorted.bam
+		samtools flagstat ${bam.baseName}.sorted.bam > ${bam.baseName}_flagstat_report.txt
+		samtools stats ${bam.baseName}.sorted.bam > ${bam.baseName}_stats_report.txt
 		"""
 	}
 
@@ -1003,7 +1007,7 @@ if( params.aligner == 'bwameth' && !params.bams ){
 		file wherearemyfiles from ch_wherearemyfiles_for_bwamem_align.collect()
 
 		output:
-		set val(name), file('*.bam') into ch_bam_for_samtools_sort_index_flagstat, ch_bam_for_preseq
+		set val(name), file('*.bam') into ch_bam_for_samtools_sort_index_flagstat
 		file "where_are_my_files.txt"
 
 		script:
@@ -1150,7 +1154,7 @@ if( params.aligner == 'biscuit' || params.bams ){
 			.ifEmpty { exit 1, "Cannot find any bam files matching: ${params.bams}\nNB: Path needs to be enclosed in quotes!" }
 			.map { row -> [ row.simpleName, [ file(row, checkIfExists: true) ] ] }
 			.into { ch_bam_for_samtools_stats; ch_bam_dedup_for_qualimap; ch_bam_for_preseq;ch_bam_sorted_for_pileup; ch_bam_sorted_for_epiread; ch_bam_noDups_for_QC; ch_bam_sorted_for_picard }
-		
+		 
 		Channel 
 			.fromPath( params.bams +".bai" )
 			.map { row -> [ row.simpleName, [ file(row, checkIfExists: true) ] ] }
